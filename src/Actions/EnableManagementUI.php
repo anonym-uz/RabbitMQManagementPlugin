@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Vito\Plugins\Makhweb\RabbitMQManagementPlugin\Actions;
+namespace AnonymUz\RabbitMQManagementPlugin\Actions;
 
 use App\Models\Server;
 use App\ServerFeatures\Action;
