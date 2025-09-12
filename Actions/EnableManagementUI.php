@@ -1,6 +1,6 @@
 <?php
 
-namespace AnonymUz\RabbitMQManagementPlugin\Actions;
+namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions;
 
 use App\Models\Server;
 use App\ServerFeatures\Action;

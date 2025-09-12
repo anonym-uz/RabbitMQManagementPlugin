@@ -1,17 +1,17 @@
 <?php
 
-namespace AnonymUz\RabbitMQManagementPlugin;
+namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin;
 
 use App\Plugins\AbstractPlugin;
 use App\Plugins\RegisterServerFeature;
 use App\Plugins\RegisterServerFeatureAction;
-use AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
-use AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
-use AnonymUz\RabbitMQManagementPlugin\Actions\CreateVirtualHost;
-use AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost;
-use AnonymUz\RabbitMQManagementPlugin\Actions\CreateUser;
-use AnonymUz\RabbitMQManagementPlugin\Actions\DeleteUser;
-use AnonymUz\RabbitMQManagementPlugin\Actions\MonitorQueues;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateVirtualHost;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateUser;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteUser;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\MonitorQueues;
 use App\DTOs\DynamicForm;
 use App\DTOs\DynamicField;
 
