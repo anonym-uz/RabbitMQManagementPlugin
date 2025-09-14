@@ -163,6 +163,10 @@ EOF\'',
     {
         $ssh = $this->service->server->ssh();
 
+        if(!$this->isInstalled()) {
+            return;
+        }
+
         $ssh->exec('sudo systemctl stop rabbitmq-server', 'stop-rabbitmq');
         $ssh->exec('sudo systemctl disable rabbitmq-server', 'disable-rabbitmq');
 
