@@ -5,6 +5,7 @@ namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin;
 use App\Plugins\AbstractPlugin;
 use App\Plugins\RegisterServerFeature;
 use App\Plugins\RegisterServerFeatureAction;
+use App\Plugins\RegisterServiceType;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateVirtualHost;
@@ -12,6 +13,7 @@ use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateUser;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteUser;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\MonitorQueues;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Services\RabbitMQ;
 use App\DTOs\DynamicForm;
 use App\DTOs\DynamicField;
 
@@ -19,10 +21,23 @@ class Plugin extends AbstractPlugin
 {
     protected string $name = 'RabbitMQ Management Plugin';
 
-    protected string $description = 'Advanced management features for RabbitMQ including Management UI, virtual hosts, user management, and queue monitoring';
+    protected string $description = 'Adds RabbitMQ message queue service with advanced management features including Management UI, virtual hosts, user management, and queue monitoring';
 
     public function boot(): void
     {
+        // Register RabbitMQ as a service type
+        RegisterServiceType::make('rabbitmq')
+            ->type('message_queue')
+            ->label('RabbitMQ')
+            ->handler(RabbitMQ::class)
+            ->versions([
+                'latest',
+            ])
+            ->data([
+                'default_port' => 5672,
+                'management_port' => 15672,
+            ])
+            ->register();
         // Register RabbitMQ Management UI feature
         RegisterServerFeature::make('rabbitmq-management-ui')
             ->label('RabbitMQ Management UI')
