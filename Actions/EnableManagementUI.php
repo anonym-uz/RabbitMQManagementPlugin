@@ -92,7 +92,6 @@ class EnableManagementUI extends Action
 listeners.tcp.default = 5672
 management.tcp.port = 15672
 management.tcp.ip = {$bindAddress}
-management.load_definitions = /etc/rabbitmq/definitions.json
 EOT;
 
         $this->server->ssh()->exec(

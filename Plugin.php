@@ -14,7 +14,6 @@ use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteUser;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
-use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\MonitorQueues;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Services\RabbitMQ;
 
 class Plugin extends AbstractPlugin
@@ -195,28 +194,6 @@ class Plugin extends AbstractPlugin
         RegisterServerFeature::make('rabbitmq-queue-monitoring')
             ->label('RabbitMQ Queue Monitor')
             ->description('Monitor and manage RabbitMQ queues')
-            ->register();
-
-        RegisterServerFeatureAction::make('rabbitmq-queue-monitoring', 'monitor')
-            ->label('View Queue Status')
-            ->form(DynamicForm::make([
-                DynamicField::make('vhost')
-                    ->text()
-                    ->label('Virtual Host')
-                    ->default('/')
-                    ->description('Virtual host to monitor'),
-                DynamicField::make('include_message_stats')
-                    ->checkbox()
-                    ->label('Include Message Statistics')
-                    ->default(true)
-                    ->description('Show detailed message statistics'),
-                DynamicField::make('include_consumer_info')
-                    ->checkbox()
-                    ->label('Include Consumer Information')
-                    ->default(true)
-                    ->description('Show consumer details for each queue'),
-            ]))
-            ->handler(MonitorQueues::class)
             ->register();
     }
 
