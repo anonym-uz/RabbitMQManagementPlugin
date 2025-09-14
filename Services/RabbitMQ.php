@@ -79,90 +79,72 @@ class RabbitMQ extends AbstractService
 
     public function install(): void
     {
-        // Install Erlang (RabbitMQ dependency)
-        $this->service->server->ssh()->exec(
-            'curl -1sLf "https://packagecloud.io/rabbitmq/erlang/gpgkey" | sudo apt-key add -',
-            'add-erlang-key'
+        $ssh = $this->service->server->ssh();
+
+        // Prereqs
+        $ssh->exec('sudo apt-get update -y', 'apt-update');
+        $ssh->exec('sudo apt-get install -y curl gnupg apt-transport-https lsb-release', 'install-prereqs');
+
+        // Create keyring dir & add Team RabbitMQ signing key (no apt-key)
+        $ssh->exec('sudo install -d -m 0755 /usr/share/keyrings', 'mkdir-keyrings');
+        $ssh->exec(
+            'curl -1sLf "https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA" ' .
+            '| sudo gpg --dearmor | sudo tee /usr/share/keyrings/com.rabbitmq.team.gpg > /dev/null',
+            'add-rabbitmq-signing-key'
         );
 
-        $this->service->server->ssh()->exec(
-            'sudo tee /etc/apt/sources.list.d/rabbitmq-erlang.list <<EOF
-deb https://packagecloud.io/rabbitmq/erlang/ubuntu/ $(lsb_release -cs) main
-EOF',
-            'add-erlang-repo'
+        // Add RabbitMQ + Erlang repos from Team RabbitMQ (deb1/deb2) with signed-by
+        $ssh->exec(
+        // pick ubuntu/debian automatically; use codename from lsb_release
+            'sudo bash -lc \'dist=$(lsb_release -si | tr "[:upper:]" "[:lower:]"); ' .
+            'codename=$(lsb_release -sc); ' .
+            'sudo tee /etc/apt/sources.list.d/rabbitmq.list >/dev/null <<EOF
+deb [signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/${dist}/${codename} ${codename} main
+deb [signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/${dist}/${codename} ${codename} main
+deb [signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-server/${dist}/${codename} ${codename} main
+deb [signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-server/${dist}/${codename} ${codename} main
+EOF\'',
+            'add-rmq-repos'
         );
 
-        // Install RabbitMQ repository
-        $this->service->server->ssh()->exec(
-            'curl -1sLf "https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey" | sudo apt-key add -',
-            'add-rabbitmq-key'
-        );
-
-        $this->service->server->ssh()->exec(
-            'sudo tee /etc/apt/sources.list.d/rabbitmq.list <<EOF
-deb https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ $(lsb_release -cs) main
-EOF',
-            'add-rabbitmq-repo'
-        );
-
-        // Update and install
-        $this->service->server->ssh()->exec(
-            'sudo apt-get update',
-            'update-apt'
-        );
-
-        $this->service->server->ssh()->exec(
-            'sudo apt-get install -y erlang-base erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key erlang-runtime-tools erlang-snmp erlang-ssl erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl',
+        // Update & install Erlang + RabbitMQ
+        $ssh->exec('sudo apt-get update -y', 'update-apt');
+        $ssh->exec(
+            'sudo apt-get install -y erlang-base erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets ' .
+            'erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key erlang-runtime-tools erlang-snmp ' .
+            'erlang-ssl erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl',
             'install-erlang'
         );
+        $ssh->exec('sudo apt-get install -y rabbitmq-server --fix-missing', 'install-rabbitmq');
 
-        $this->service->server->ssh()->exec(
-            'sudo apt-get install -y rabbitmq-server',
-            'install-rabbitmq'
-        );
+        // Enable & start service, wait until it's fully up
+        $ssh->exec('sudo systemctl enable --now rabbitmq-server', 'enable-start-rabbitmq');
+        $ssh->exec('sudo rabbitmqctl await_startup -t 60', 'await-startup');
 
-        // Enable and start RabbitMQ
-        $this->service->server->ssh()->exec(
-            'sudo systemctl enable rabbitmq-server',
-            'enable-rabbitmq'
-        );
+        // Enable Management plugin for :15672
+        $ssh->exec('sudo rabbitmq-plugins enable rabbitmq_management', 'enable-management');
 
-        $this->service->server->ssh()->exec(
-            'sudo systemctl start rabbitmq-server',
-            'start-rabbitmq'
-        );
-
-        // Create admin user with generated password
+        // Credentials
         $username = $this->service->type_data['username'] ?? 'admin';
-        $password = $this->service->type_data['password'] ?? Str::random(16);
+        $password = $this->service->type_data['password'] ?? \Illuminate\Support\Str::random(16);
+        $u = escapeshellarg($username);
+        $p = escapeshellarg($password);
 
-        // Remove default guest user for security
+        // Remove default 'guest' user (ignore if missing)
         try {
-            $this->service->server->ssh()->exec(
-                'sudo rabbitmqctl delete_user guest',
-                'delete-guest-user'
-            );
+            $ssh->exec('sudo rabbitmqctl delete_user guest', 'delete-guest-user');
+        } catch (\Exception $e) {}
+
+        // Create admin user; if it exists, just reset the password
+        try {
+            $ssh->exec("sudo rabbitmqctl add_user {$u} {$p}", 'create-admin-user');
         } catch (\Exception $e) {
-            // Guest user might not exist
+            $ssh->exec("sudo rabbitmqctl change_password {$u} {$p}", 'change-admin-password');
         }
+        $ssh->exec("sudo rabbitmqctl set_user_tags {$u} administrator", 'set-admin-tags');
+        $ssh->exec("sudo rabbitmqctl set_permissions -p / {$u} \".*\" \".*\" \".*\"", 'set-admin-permissions');
 
-        // Create admin user
-        $this->service->server->ssh()->exec(
-            "sudo rabbitmqctl add_user {$username} {$password}",
-            'create-admin-user'
-        );
-
-        $this->service->server->ssh()->exec(
-            "sudo rabbitmqctl set_user_tags {$username} administrator",
-            'set-admin-tags'
-        );
-
-        $this->service->server->ssh()->exec(
-            "sudo rabbitmqctl set_permissions -p / {$username} \".*\" \".*\" \".*\"",
-            'set-admin-permissions'
-        );
-
-        // Update service with credentials
+        // Persist connection info
         $this->service->type_data = [
             'username' => $username,
             'password' => $password,
@@ -174,33 +156,22 @@ EOF',
 
     public function uninstall(): void
     {
-        // Stop and disable service
-        $this->service->server->ssh()->exec(
-            'sudo systemctl stop rabbitmq-server',
-            'stop-rabbitmq'
-        );
+        $ssh = $this->service->server->ssh();
 
-        $this->service->server->ssh()->exec(
-            'sudo systemctl disable rabbitmq-server',
-            'disable-rabbitmq'
-        );
+        // Stop/disable
+        $ssh->exec('sudo systemctl stop rabbitmq-server', 'stop-rabbitmq');
+        $ssh->exec('sudo systemctl disable rabbitmq-server', 'disable-rabbitmq');
 
-        // Uninstall packages
-        $this->service->server->ssh()->exec(
-            'sudo apt-get remove -y rabbitmq-server',
-            'remove-rabbitmq'
-        );
+        // Remove packages
+        $ssh->exec('sudo apt-get purge -y rabbitmq-server', 'purge-rabbitmq');
+        $ssh->exec('sudo apt-get autoremove -y', 'autoremove');
 
-        $this->service->server->ssh()->exec(
-            'sudo apt-get autoremove -y',
-            'autoremove-packages'
-        );
+        // Remove data/config
+        $ssh->exec('sudo rm -rf /etc/rabbitmq /var/lib/rabbitmq', 'remove-rabbitmq-config');
 
-        // Remove configuration
-        $this->service->server->ssh()->exec(
-            'sudo rm -rf /etc/rabbitmq /var/lib/rabbitmq',
-            'remove-rabbitmq-config'
-        );
+        // Clean up repo + key (optional, but keeps apt tidy)
+        $ssh->exec('sudo rm -f /etc/apt/sources.list.d/rabbitmq.list', 'remove-rmq-repo');
+        $ssh->exec('sudo rm -f /usr/share/keyrings/com.rabbitmq.team.gpg', 'remove-rmq-key');
     }
 
     public function restart(): void
