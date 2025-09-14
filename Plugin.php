@@ -2,20 +2,20 @@
 
 namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin;
 
+use App\DTOs\DynamicField;
+use App\DTOs\DynamicForm;
 use App\Plugins\AbstractPlugin;
 use App\Plugins\RegisterServerFeature;
 use App\Plugins\RegisterServerFeatureAction;
 use App\Plugins\RegisterServiceType;
-use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
-use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
-use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateVirtualHost;
-use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateUser;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\CreateVirtualHost;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteUser;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DeleteVirtualHost;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\DisableManagementUI;
+use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\EnableManagementUI;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions\MonitorQueues;
 use App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Services\RabbitMQ;
-use App\DTOs\DynamicForm;
-use App\DTOs\DynamicField;
 
 class Plugin extends AbstractPlugin
 {
@@ -43,7 +43,7 @@ class Plugin extends AbstractPlugin
             ->label('RabbitMQ Management UI')
             ->description('Enable web-based management interface for RabbitMQ on port 15672')
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-management-ui', 'enable')
             ->label('Enable Management UI')
             ->form(DynamicForm::make([
@@ -73,18 +73,18 @@ class Plugin extends AbstractPlugin
             ]))
             ->handler(EnableManagementUI::class)
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-management-ui', 'disable')
             ->label('Disable Management UI')
             ->handler(DisableManagementUI::class)
             ->register();
-        
+
         // Register Virtual Host Management feature
         RegisterServerFeature::make('rabbitmq-vhost-management')
             ->label('RabbitMQ Virtual Hosts')
             ->description('Manage RabbitMQ virtual hosts for multi-tenant setups')
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-vhost-management', 'create')
             ->label('Create Virtual Host')
             ->form(DynamicForm::make([
@@ -108,7 +108,7 @@ class Plugin extends AbstractPlugin
             ]))
             ->handler(CreateVirtualHost::class)
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-vhost-management', 'delete')
             ->label('Delete Virtual Host')
             ->form(DynamicForm::make([
@@ -123,13 +123,13 @@ class Plugin extends AbstractPlugin
             ]))
             ->handler(DeleteVirtualHost::class)
             ->register();
-        
+
         // Register User Management feature
         RegisterServerFeature::make('rabbitmq-user-management')
             ->label('RabbitMQ Users')
             ->description('Manage RabbitMQ users and their permissions')
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-user-management', 'create')
             ->label('Create User')
             ->form(DynamicForm::make([
@@ -175,7 +175,7 @@ class Plugin extends AbstractPlugin
             ]))
             ->handler(CreateUser::class)
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-user-management', 'delete')
             ->label('Delete User')
             ->form(DynamicForm::make([
@@ -190,13 +190,13 @@ class Plugin extends AbstractPlugin
             ]))
             ->handler(DeleteUser::class)
             ->register();
-        
+
         // Register Queue Monitoring feature
         RegisterServerFeature::make('rabbitmq-queue-monitoring')
             ->label('RabbitMQ Queue Monitor')
             ->description('Monitor and manage RabbitMQ queues')
             ->register();
-        
+
         RegisterServerFeatureAction::make('rabbitmq-queue-monitoring', 'monitor')
             ->label('View Queue Status')
             ->form(DynamicForm::make([
@@ -219,13 +219,13 @@ class Plugin extends AbstractPlugin
             ->handler(MonitorQueues::class)
             ->register();
     }
-    
+
     public function install(): void
     {
         // Actions to perform when the plugin is installed
         // Could include creating configuration files, etc.
     }
-    
+
     public function uninstall(): void
     {
         // Cleanup actions when the plugin is uninstalled
