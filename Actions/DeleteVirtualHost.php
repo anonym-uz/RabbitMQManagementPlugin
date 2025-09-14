@@ -20,7 +20,7 @@ class DeleteVirtualHost extends Action
 
     public function active(): bool
     {
-        return false;
+        return true;
     }
 
     public function form(): ?DynamicForm
