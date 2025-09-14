@@ -9,6 +9,21 @@ class DisableManagementUI extends Action
 {
     public function __construct(public Server $server) {}
 
+    public function name(): string
+    {
+        return 'disable-rabbitmq-management-ui';
+    }
+
+    public function active(): bool
+    {
+        return false; // This action doesn't have an active state
+    }
+
+    public function handle(array $input): void
+    {
+        $this->run($input);
+    }
+
     public function run(array $input): void
     {
         // Check if RabbitMQ is installed

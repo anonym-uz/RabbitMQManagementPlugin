@@ -10,6 +10,27 @@ class EnableManagementUI extends Action
 {
     public function __construct(public Server $server) {}
 
+    public function name(): string
+    {
+        return 'enable-rabbitmq-management-ui';
+    }
+
+    public function active(): bool
+    {
+        // Check if management UI is already enabled
+        try {
+            $result = $this->server->ssh()->exec('sudo rabbitmq-plugins list -e | grep rabbitmq_management');
+            return str_contains($result, 'rabbitmq_management');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public function handle(array $input): void
+    {
+        $this->run($input);
+    }
+
     public function run(array $input): void
     {
         $bindAddress = $input['bind_address'] ?? '0.0.0.0';
