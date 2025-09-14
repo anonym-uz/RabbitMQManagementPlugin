@@ -9,6 +9,21 @@ class MonitorQueues extends Action
 {
     public function __construct(public Server $server) {}
 
+    public function name(): string
+    {
+        return 'monitor-rabbitmq-queues';
+    }
+
+    public function active(): bool
+    {
+        return false; // Actions don't have an active state
+    }
+
+    public function handle(array $input): void
+    {
+        $this->run($input);
+    }
+
     public function run(array $input): void
     {
         $vhost = $input['vhost'] ?? '/';
