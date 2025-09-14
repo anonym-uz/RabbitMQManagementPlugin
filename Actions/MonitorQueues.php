@@ -2,8 +2,12 @@
 
 namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions;
 
+use App\DTOs\DynamicField;
+use App\DTOs\DynamicForm;
 use App\Models\Server;
 use App\ServerFeatures\Action;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class MonitorQueues extends Action
 {
@@ -11,55 +15,73 @@ class MonitorQueues extends Action
 
     public function name(): string
     {
-        return 'monitor-rabbitmq-queues';
+        return 'Monitor Queues';
     }
 
     public function active(): bool
     {
-        return false; // Actions don't have an active state
+        return false;
     }
 
-    public function handle(array $input): void
+    public function form(): ?DynamicForm
     {
-        $this->run($input);
+        return DynamicForm::make([
+            DynamicField::make('vhost')
+                ->text()
+                ->label('Virtual Host')
+                ->description('The virtual host to monitor')
+                ->default('/'),
+            DynamicField::make('include_message_stats')
+                ->checkbox()
+                ->label('Include Message Statistics')
+                ->description('Show ready and unacknowledged message counts')
+                ->default(true),
+            DynamicField::make('include_consumer_info')
+                ->checkbox()
+                ->label('Include Consumer Information')
+                ->description('Show details about connected consumers')
+                ->default(true),
+        ]);
     }
 
-    public function run(array $input): void
+    public function handle(Request $request): void
     {
-        $vhost = $input['vhost'] ?? '/';
-        $includeMessageStats = $input['include_message_stats'] ?? true;
-        $includeConsumerInfo = $input['include_consumer_info'] ?? true;
-        
+        Validator::make($request->all(), [
+            'vhost' => 'required|string',
+            'include_message_stats' => 'boolean',
+            'include_consumer_info' => 'boolean',
+        ])->validate();
+
+        $vhost = $request->input('vhost', '/');
+        $includeMessageStats = $request->input('include_message_stats', true);
+        $includeConsumerInfo = $request->input('include_consumer_info', true);
+
         // Check if RabbitMQ is installed
         $rabbitmq = $this->server->messageQueue();
         if (!$rabbitmq) {
-            $this->addErrorLog('RabbitMQ is not installed on this server');
             throw new \Exception('RabbitMQ is not installed on this server');
         }
-        
+
         // Get list of queues
         $queuesOutput = $this->server->ssh()->exec(
             "sudo rabbitmqctl list_queues -p {$vhost} name messages consumers memory state",
             'list-queues'
         );
-        
-        $this->addInfoLog("Queue Status for vhost: {$vhost}");
-        $this->addInfoLog("=====================================");
-        
-        // Parse and display queue information
+
+        $queueInfo = [];
         $lines = explode("\n", trim($queuesOutput));
-        $header = array_shift($lines); // Remove header line
-        
+        array_shift($lines); // Remove header line
+
         if (empty($lines)) {
-            $this->addInfoLog("No queues found in vhost '{$vhost}'");
+            $request->session()->flash('info', "No queues found in vhost '{$vhost}'");
             return;
         }
-        
+
         foreach ($lines as $line) {
             if (empty(trim($line))) {
                 continue;
             }
-            
+
             $parts = preg_split('/\s+/', trim($line));
             if (count($parts) >= 5) {
                 $queueName = $parts[0];
@@ -67,92 +89,95 @@ class MonitorQueues extends Action
                 $consumers = $parts[2];
                 $memory = $this->formatBytes((int)$parts[3]);
                 $state = $parts[4];
-                
-                $this->addInfoLog("Queue: {$queueName}");
-                $this->addInfoLog("  Messages: {$messages}");
-                $this->addInfoLog("  Consumers: {$consumers}");
-                $this->addInfoLog("  Memory: {$memory}");
-                $this->addInfoLog("  State: {$state}");
-                
+
+                $queueData = [
+                    'name' => $queueName,
+                    'messages' => $messages,
+                    'consumers' => $consumers,
+                    'memory' => $memory,
+                    'state' => $state,
+                ];
+
                 // Get detailed message statistics if requested
                 if ($includeMessageStats && $messages > 0) {
                     $statsOutput = $this->server->ssh()->exec(
                         "sudo rabbitmqctl list_queues -p {$vhost} name messages_ready messages_unacknowledged | grep '^{$queueName}'",
                         'get-message-stats'
                     );
-                    
+
                     if (!empty($statsOutput)) {
                         $statsParts = preg_split('/\s+/', trim($statsOutput));
                         if (count($statsParts) >= 3) {
-                            $this->addInfoLog("  Ready: {$statsParts[1]}");
-                            $this->addInfoLog("  Unacknowledged: {$statsParts[2]}");
+                            $queueData['ready'] = $statsParts[1];
+                            $queueData['unacknowledged'] = $statsParts[2];
                         }
                     }
                 }
-                
+
                 // Get consumer information if requested
                 if ($includeConsumerInfo && $consumers > 0) {
                     $consumerOutput = $this->server->ssh()->exec(
                         "sudo rabbitmqctl list_consumers -p {$vhost} | grep '^{$queueName}'",
                         'get-consumer-info'
                     );
-                    
+
                     if (!empty($consumerOutput)) {
-                        $consumerLines = explode("\n", trim($consumerOutput));
-                        $this->addInfoLog("  Consumer Details:");
-                        foreach ($consumerLines as $consumerLine) {
-                            if (!empty(trim($consumerLine))) {
-                                $this->addInfoLog("    - {$consumerLine}");
-                            }
-                        }
+                        $queueData['consumer_details'] = trim($consumerOutput);
                     }
                 }
-                
-                $this->addInfoLog(""); // Empty line for readability
+
+                $queueInfo[] = $queueData;
             }
         }
-        
+
         // Get overview statistics
         $overviewOutput = $this->server->ssh()->exec(
             "sudo rabbitmqctl list_vhosts name messages",
             'get-vhost-overview'
         );
-        
+
+        $totalMessages = '0';
         $overviewLines = explode("\n", trim($overviewOutput));
         foreach ($overviewLines as $overviewLine) {
             if (strpos($overviewLine, $vhost) !== false) {
                 $parts = preg_split('/\s+/', trim($overviewLine));
                 if (count($parts) >= 2) {
                     $totalMessages = $parts[1] ?? '0';
-                    $this->addSuccessLog("Total messages in vhost '{$vhost}': {$totalMessages}");
                 }
                 break;
             }
         }
-        
-        // Get node statistics
+
+        // Get node health status
         $nodeStats = $this->server->ssh()->exec(
             "sudo rabbitmqctl node_health_check",
             'node-health-check'
         );
-        
-        if (strpos($nodeStats, 'Health check passed') !== false) {
-            $this->addSuccessLog('RabbitMQ node health check: PASSED');
-        } else {
-            $this->addWarningLog('RabbitMQ node health check: Check the logs for details');
-        }
+
+        $healthStatus = strpos($nodeStats, 'Health check passed') !== false ? 'PASSED' : 'CHECK LOGS';
+
+        // Store results in session for display
+        $request->session()->flash('queue_monitor_results', [
+            'vhost' => $vhost,
+            'total_messages' => $totalMessages,
+            'health_status' => $healthStatus,
+            'queues' => $queueInfo,
+        ]);
+
+        $request->session()->flash('success', "Queue monitoring completed for vhost '{$vhost}'");
+        $request->session()->flash('info', "Total messages: {$totalMessages} | Health check: {$healthStatus}");
     }
-    
+
     private function formatBytes(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB'];
         $unitIndex = 0;
-        
+
         while ($bytes >= 1024 && $unitIndex < count($units) - 1) {
             $bytes /= 1024;
             $unitIndex++;
         }
-        
+
         return round($bytes, 2) . ' ' . $units[$unitIndex];
     }
 }

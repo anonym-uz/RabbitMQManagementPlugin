@@ -2,8 +2,11 @@
 
 namespace App\Vito\Plugins\AnonymUz\RabbitMQManagementPlugin\Actions;
 
+use App\DTOs\DynamicField;
+use App\DTOs\DynamicForm;
 use App\Models\Server;
 use App\ServerFeatures\Action;
+use Illuminate\Http\Request;
 
 class DisableManagementUI extends Action
 {
@@ -11,34 +14,38 @@ class DisableManagementUI extends Action
 
     public function name(): string
     {
-        return 'disable-rabbitmq-management-ui';
+        return 'Disable Management UI';
     }
 
     public function active(): bool
     {
-        return false; // This action doesn't have an active state
+        return false;
     }
 
-    public function handle(array $input): void
+    public function form(): ?DynamicForm
     {
-        $this->run($input);
+        return DynamicForm::make([
+            DynamicField::make('warning_alert')
+                ->alert()
+                ->options(['type' => 'warning'])
+                ->description('This will disable the RabbitMQ Management UI web interface on port 15672.'),
+        ]);
     }
 
-    public function run(array $input): void
+    public function handle(Request $request): void
     {
         // Check if RabbitMQ is installed
         $rabbitmq = $this->server->messageQueue();
         if (!$rabbitmq) {
-            $this->addErrorLog('RabbitMQ is not installed on this server');
             throw new \Exception('RabbitMQ is not installed on this server');
         }
-        
+
         // Disable the management plugin
         $this->server->ssh()->exec(
             'sudo rabbitmq-plugins disable rabbitmq_management',
             'disable-rabbitmq-management'
         );
-        
+
         // Remove firewall rule if it exists
         try {
             $this->server->ssh()->exec(
@@ -48,13 +55,13 @@ class DisableManagementUI extends Action
         } catch (\Exception $e) {
             // UFW might not be enabled or rule might not exist
         }
-        
+
         // Restart RabbitMQ to apply changes
         $this->server->ssh()->exec(
             'sudo systemctl restart rabbitmq-server',
             'restart-rabbitmq'
         );
-        
-        $this->addSuccessLog('RabbitMQ Management UI has been disabled');
+
+        $request->session()->flash('success', 'RabbitMQ Management UI has been disabled');
     }
 }
